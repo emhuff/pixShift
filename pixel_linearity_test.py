@@ -27,7 +27,7 @@ def get_image_array(file ="../../Data/ibcj09ksq_ima.fits", ext_per_image = 5,
     return sci_arr, err_arr, mask_arr
 
 
-def make_nonlin_map(sci_arr, err_arr, mask_arr):
+def make_chi2_map(sci_arr, err_arr, mask_arr):
     mean_image = np.mean(sci_arr,axis=0)
     deviant_arr = sci_arr - np.expand_dims(mean_image,axis=0)
     chisq = np.sum((deviant_arr/err_arr)**2,axis=0)
@@ -38,7 +38,7 @@ def make_nonlin_map(sci_arr, err_arr, mask_arr):
 
 def main(argv):
     sci_arr, err_arr, mask_arr = get_image_array()
-    theMap, ubermask = make_nonlin_map(sci_arr, err_arr, mask_arr)
+    theMap, ubermask = make_chi2_map(sci_arr, err_arr, mask_arr)
     fig,(ax1,ax2) = plt.subplots(nrows=1,ncols=2,figsize=(14,7))
     im1 = ax1.imshow(theMap,vmin=0,vmax=2)
     image = np.mean(sci_arr,axis=0)
@@ -65,9 +65,13 @@ def main(argv):
     ax3.hist2d(np.log10(image_sharp[use].flatten()),np.log10(theMap[use].flatten()),
                bins = [np.linspace(-1,2,100),np.linspace(-2,1,100)],
                norm=LogNorm())
+    ax3.set_xlabel('(image - smoothed image) value')
+    ax3.set_ylabel("chi2")
     ax4.hist2d(np.log10(image_filtered[use].flatten()),np.log10(theMap[use].flatten()),
                bins = [np.linspace(0.5,2.5,100),np.linspace(-2,1,100)],
                norm=LogNorm())
+    ax4.set_xlabel("ipc filtered image value")
+    ax4.set_ylabel("chi2")
     #ax3.set_xscale('log')
     #ax3.set_yscale('log')
     fig2.savefig("flux_chisq_correlation.png")
