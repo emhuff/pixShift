@@ -2,9 +2,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import esutil
+from scipy import ndimage
 import sys
 
-def get_image_array(file ="../Data/ibcj09ksq_ima.fits", ext_per_image = 5,
+def get_image_array(file ="../../Data/ibcj09ksq_ima.fits", ext_per_image = 5,
                     exclude_last = 3):
     hdr = esutil.io.read_header(file)
     n_ext  = hdr.get("NEXTEND")
@@ -33,18 +34,44 @@ def make_nonlin_map(sci_arr, err_arr, mask_arr):
     chisq_dof = chisq*1./sci_arr.shape[0]
     mask_summed = np.sum(mask_arr,axis=0) | ~np.isfinite(chisq)
     chisq_dof[mask_summed != 0] = 0.
-    return chisq_dof
+    return chisq_dof, mask_summed
 
 def main(argv):
     sci_arr, err_arr, mask_arr = get_image_array()
-    theMap = make_nonlin_map(sci_arr, err_arr, mask_arr)
+    theMap, ubermask = make_nonlin_map(sci_arr, err_arr, mask_arr)
     fig,(ax1,ax2) = plt.subplots(nrows=1,ncols=2,figsize=(14,7))
     im1 = ax1.imshow(theMap,vmin=0,vmax=2)
+    image = np.mean(sci_arr,axis=0)
+    image_sharp = image - ndimage.gaussian_filter(image,5.)
+    use = ubermask == 0
+    u = 0.0011
+    v = 0.0127
+    w = 0.936
+    x = 0.0164
+    image_filtered = image * 0.
+    theFilter = np.array([[u,v, u], [x, w, x], [u, v, u]])
+    for i in xrange(3):
+        for j in xrange(3):
+            image_filtered = image_filtered + theFilter[i,j] * image
     ax1.set_title("chisq dof map")
     im2 = ax2.imshow(np.arcsinh(np.mean(sci_arr,axis=0)/0.1),cmap=plt.cm.Greys)
     ax2.set_title("mean science image")
     fig.savefig("chisq_nonlin_map.png")
     fig.show()
+
+    from matplotlib.colors import LogNorm
+    fig2,(ax3,ax4) = plt.subplots(nrows=1,ncols=2,figsize=(14,7))
+    #ax3.plot(image.flatten(),theMap.flatten(),',')
+    ax3.hist2d(np.log10(image_sharp[use].flatten()),np.log10(theMap[use].flatten()),
+               bins = [np.linspace(-1,2,100),np.linspace(-2,1,100)],
+               norm=LogNorm())
+    ax4.hist2d(np.log10(image_filtered[use].flatten()),np.log10(theMap[use].flatten()),
+               bins = [np.linspace(0.5,2.5,100),np.linspace(-2,1,100)],
+               norm=LogNorm())
+    #ax3.set_xscale('log')
+    #ax3.set_yscale('log')
+    fig2.savefig("flux_chisq_correlation.png")
+    fig2.show()
     stop
 
  
