@@ -5,7 +5,25 @@ import esutil
 from scipy import ndimage
 import sys
 
-def get_image_array(file ="../../Data/ibcj09ksq_ima.fits", ext_per_image = 5,
+import cdmodel_functions
+
+
+file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/ibcj09ksq_ima.fits"
+
+def apply_cdmodel (im, factor=1):
+    """
+    Uses galsim to apply "cdmodel" to an input image. 
+    "cdmodel" ('charge deflection') is an implementation of the 'brightter-fatter'
+    model by Antilogus et al 2014 as performed by Gruen et al 2015.
+    """
+    (aL,aR,aB,aT) = cdmodel_functions.readmeanmatrices()
+    cd = galsim.cdmodel.BaseCDModel (factor*aL,factor*aR,factor*aB,factor*aT)
+    im=cd.applyForward(im)
+    return im
+
+
+
+def get_image_array(file=file_path, ext_per_image = 5,
                     exclude_last = 3):
     hdr = esutil.io.read_header(file)
     n_ext  = hdr.get("NEXTEND")
@@ -36,6 +54,12 @@ def make_chi2_map(sci_arr, err_arr, mask_arr):
     chisq_dof[mask_summed != 0] = 0.
     return chisq_dof, mask_summed
 
+
+#def make_quadratict_map (sci_arr, err_arr, mask_arr):
+#    mean_image=np.mean(sci_arr, axis=0)
+#    deviant_arr = sci_arr - np.expand_dims(mean_image,axis=0)
+
+
 def main(argv):
     sci_arr, err_arr, mask_arr = get_image_array()
     theMap, ubermask = make_chi2_map(sci_arr, err_arr, mask_arr)
@@ -53,6 +77,9 @@ def main(argv):
     for i in xrange(3):
         for j in xrange(3):
             image_filtered = image_filtered + theFilter[i,j] * image
+
+    image_filtered-=image
+
     ax1.set_title("chisq dof map")
     im2 = ax2.imshow(np.arcsinh(np.mean(sci_arr,axis=0)/0.1),cmap=plt.cm.Greys)
     ax2.set_title("mean science image")
@@ -67,9 +94,9 @@ def main(argv):
                norm=LogNorm())
     ax3.set_xlabel('(image - smoothed image) value')
     ax3.set_ylabel("chi2")
-    ax4.hist2d(np.log10(image_filtered[use].flatten()),np.log10(theMap[use].flatten()),
-               bins = [np.linspace(0.5,2.5,100),np.linspace(-2,1,100)],
-               norm=LogNorm())
+    ax4.hist2d(np.log10(image_filtered[use].flatten()),np.log10(theMap[use].flatten()),norm=LogNorm())
+               #bins = [np.linspace(0.5,2.5,100),np.linspace(-2,1,100)],
+               #norm=LogNorm())
     ax4.set_xlabel("ipc filtered image value")
     ax4.set_ylabel("chi2")
     #ax3.set_xscale('log')
