@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import esutil
 from scipy import ndimage
 import sys
+import galsim 
 
 import cdmodel_functions
 
