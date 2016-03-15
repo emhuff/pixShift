@@ -4,12 +4,13 @@ import matplotlib.pyplot as plt
 import esutil
 from scipy import ndimage
 import sys
-import galsim 
+import galsim
 
 import cdmodel_functions
 
 
 file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/ibcj09ksq_ima.fits"
+file_path="/Users/amalagon/WFIRST/WFC3_data/multiaccum_ima_files_omega_cen/ibcf81qkq_ima.fits"
 
 def apply_cdmodel (im, factor=1):
     """
@@ -88,20 +89,13 @@ def main(argv):
     fig.show()
 
     from matplotlib.colors import LogNorm
-    fig2,(ax3,ax4) = plt.subplots(nrows=1,ncols=2,figsize=(14,7))
+    fig2, ax4 = plt.subplots(nrows=1,ncols=1,figsize=(7,7))
     #ax3.plot(image.flatten(),theMap.flatten(),',')
-    ax3.hist2d(np.log10(image_sharp[use].flatten()),np.log10(theMap[use].flatten()),
-               bins = [np.linspace(-1,2,100),np.linspace(-2,1,100)],
-               norm=LogNorm())
-    ax3.set_xlabel('(image - smoothed image) value')
-    ax3.set_ylabel("chi2")
-    ax4.hist2d(np.log10(image_filtered[use].flatten()),np.log10(theMap[use].flatten()),norm=LogNorm())
-               #bins = [np.linspace(0.5,2.5,100),np.linspace(-2,1,100)],
+    ax4.hist2d((image_filtered[use].flatten()),np.log10(theMap[use].flatten()),norm=LogNorm(),
+               bins = [np.linspace(-0.005,0.005,100),np.linspace(-2,1,100)])
                #norm=LogNorm())
     ax4.set_xlabel("ipc filtered image value")
     ax4.set_ylabel("chi2")
-    #ax3.set_xscale('log')
-    #ax3.set_yscale('log')
     fig2.savefig("flux_chisq_correlation.png")
     fig2.show()
     stop
