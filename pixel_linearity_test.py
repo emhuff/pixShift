@@ -13,7 +13,8 @@ import cdmodel_functions
 #file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/omega-cen-ima-files/ibcj09kkq_ima.fits"
 #file_path="/Users/amalagon/WFIRST/WFC3_data/multiaccum_ima_files_omega_cen/ibcf81qkq_ima.fits"
 #file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD153/ibcf0cvmq_ima.fits"
-file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD71_G191B2B/ibcf90i1q_ima.fits"
+#file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD71_G191B2B/ibcf90i1q_ima.fits"
+file_path = "../../Data/ibcj09ksq_ima.fits" # path to file on Huff's machine.
 
 def apply_cdmodel (im, factor=1):
     """
@@ -126,17 +127,19 @@ def plot_average_pixel_trend(sci_arr, err_arr, mask_arr):
     image_filtered-=image
     image_filtered[ubermask | ~np.isfinite(image_filtered)] = 0.
     # Bin the filtered image values into quantiles.
-    nq = 50
+    nq = 10
     quant = np.percentile(image_filtered[use].flatten(), np.linspace(0,100,nq))
     deviant_arr = sci_arr - np.expand_dims(image,axis=0)
     max_interval = 0.
     timeseries = []
-    for i in xrange(nq):
+    
+    for i in xrange(nq-1):
         these_pixels = ( (image_filtered > quant[i]) &
                          (image_filtered <= quant[i+1]) &
                          (image_filtered != 0) )
+        these_pixels_3d = np.repeat(np.expand_dims(these_pixels,axis=0),sci_arr.shape[0],axis=0)
         this_dev_array = deviant_arr.copy()
-        this_dev_array[~these_pixels] = 0.
+        this_dev_array[~these_pixels_3d] = 0.
         this_npix = np.sum(these_pixels)
         this_timeseries = np.sum(np.sum(this_dev_array,axis=1),axis=1) * 1./this_npix
         timeseries.append(this_timeseries)
@@ -146,8 +149,8 @@ def plot_average_pixel_trend(sci_arr, err_arr, mask_arr):
     offset_array = (np.arange(nq) - np.mean(np.arange(nq))) * max_interval
 
     fig,ax = plt.subplots()
-    for i in xrange(nq):
-        ax.plot(series[i] + offset_array[i])
+    for i in xrange(nq-1):
+        ax.plot(timeseries[i] + offset_array[i])
     fig.savefig("linearity_timeseries_trend.png")
     fig.show()
     stop
