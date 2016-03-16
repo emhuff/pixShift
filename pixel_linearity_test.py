@@ -12,9 +12,9 @@ import cdmodel_functions
 #file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/omega-cen-ima-files/ibcj09ksq_ima.fits"
 #file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/omega-cen-ima-files/ibcj09kkq_ima.fits"
 #file_path="/Users/amalagon/WFIRST/WFC3_data/multiaccum_ima_files_omega_cen/ibcf81qkq_ima.fits"
-#file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD153/ibcf0cvmq_ima.fits"
+file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD153/ibcf0cvmq_ima.fits"
 #file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD71_G191B2B/ibcf90i1q_ima.fits"
-file_path = "../../Data/ibcj09ksq_ima.fits" # path to file on Huff's machine.
+#file_path = "../../Data/ibcj09ksq_ima.fits" # path to file on Huff's machine.
 
 def apply_cdmodel (im, factor=1):
     """
@@ -150,8 +150,11 @@ def plot_average_pixel_trend(sci_arr, err_arr, mask_arr):
 
     fig,ax = plt.subplots()
     for i in xrange(nq-1):
-        ax.plot(timeseries[i] + offset_array[i])
+        ax.plot((timeseries[i] + offset_array[i])[::-1])
     fig.savefig("linearity_timeseries_trend.png")
+    ax.set_xlabel ("Time (arbitrary units)")
+    ax.set_ylabel ("Corrected pixel flux (e/sec)")
+
     fig.show()
     stop
             
