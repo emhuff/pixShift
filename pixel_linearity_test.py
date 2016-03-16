@@ -98,10 +98,6 @@ def get_simulated_array (delta_time=10, n_ext=10):
     return sci_arr, err_arr, mask_arr
 
 
-
-
-
-
 def make_chi2_map(sci_arr, err_arr, mask_arr):
     mean_image = np.average(sci_arr,weights=1.0/err_arr**2, axis=0)
     deviant_arr = sci_arr - np.expand_dims(mean_image,axis=0)
@@ -116,14 +112,55 @@ def make_chi2_map(sci_arr, err_arr, mask_arr):
 #    mean_image=np.mean(sci_arr, axis=0)
 #    deviant_arr = sci_arr - np.expand_dims(mean_image,axis=0)
 
+def plot_average_pixel_trend(sci_arr, err_arr, mask_arr):
+    chi2Map, ubermask = make_chi2_map(sci_arr, err_arr, mask_arr)
+    use = ~ubermask  #Negating the bad guys
+    image = np.average(sci_arr,axis=0, weights = 1./err_arr**2)
+    image[ubermask] = -np.inf
+    image_filtered = image * 0.
+    theFilter = np.array([[0.,a, 0.], [a, -4*a, a], [0., a, 0.]])  #Laplacian
+    for i in xrange(3):
+        for j in xrange(3):
+            image_filtered = image_filtered + theFilter[i,j] * image
+    image_filtered-=image
+    image_filtered[ubermask | ~np.isfinite(image_filtered)] = 0.
+    # Bin the filtered image values into quantiles.
+    nq = 50
+    quant = np.percentile(image_filtered[use].flatten(), np.linspace(0,100,nq))
+    deviant_arr = sci_arr - np.expand_dims(image,axis=0)
+    max_interval = 0.
+    timeseries = []
+    for i in xrange(nq):
+        these_pixels = ( (image_filtered > quant[i]) &
+                         (image_filtered <= quant[i+1]) &
+                         (image_filtered != 0) )
+        this_dev_array = deviant_arr.copy()
+        this_dev_array[~these_pixels] = 0.
+        this_npix = np.sum(these_pixels)
+        this_timeseries = np.sum(np.sum(this_dev_array,axis=1),axis=1) * 1./this_npix
+        timeseries.append(this_timeseries)
+        this_interval = np.abs(np.max(this_timeseries) - np.min(this_timeseries))
+        if this_interval > max_interval:
+            max_interval = this_interval
+    offset_array = (np.arange(nq) - np.mean(np.arange(nq))) * max_interval
 
+    fig,ax = plt.subplots()
+    for i in xrange(nq):
+        ax.plot(series[i] + offset_array[i])
+    fig.savefig("linearity_timeseries_trend.png")
+    fig.show()
+    stop
+            
 def main(argv):
+    
     sci_arr, err_arr, mask_arr = get_image_array()
+    plot_average_pixel_trend(sci_arr, err_arr, mask_arr)
+    
     #sci_arr, err_arr, mask_arr = get_simulated_array(delta_time=10, n_ext=10)
 
-    theMap, ubermask = make_chi2_map(sci_arr, err_arr, mask_arr)
+    chi2Map, ubermask = make_chi2_map(sci_arr, err_arr, mask_arr)
     fig,(ax1,ax2) = plt.subplots(nrows=1,ncols=2,figsize=(14,7))
-    im1 = ax1.imshow(theMap,vmin=0,vmax=2)
+    im1 = ax1.imshow(chi2Map,vmin=0,vmax=2)
     image = np.mean(sci_arr,axis=0)
     image_sharp = image - ndimage.gaussian_filter(image,5.)
     use = ~ubermask  #Negating the bad guys
@@ -162,9 +199,9 @@ def main(argv):
 
 
     fig2, ax4 = plt.subplots(nrows=1,ncols=1,figsize=(7,7))
-    #ax3.plot(image.flatten(),theMap.flatten(),',')
+    #ax3.plot(image.flatten(),chi2Map.flatten(),',')
     im_filtered_min, im_filtered_max = np.percentile ((image_filtered[use].flatten()), [5,95]  )
-    ax4.hist2d((image_filtered[use].flatten()),(theMap[use].flatten()),norm=LogNorm(),
+    ax4.hist2d((image_filtered[use].flatten()),(chi2Map[use].flatten()),norm=LogNorm(),
                bins = [np.linspace(im_filtered_min - 0.5*np.abs(im_filtered_min), im_filtered_max +  0.5*np.abs(im_filtered_max),100),np.linspace(-2.0,2.0,100)])
                #norm=LogNorm())
     ax4.axhline (0., linestyle="--")
