@@ -118,6 +118,7 @@ def plot_average_pixel_trend(sci_arr, err_arr, mask_arr):
     image = np.average(sci_arr,axis=0, weights = 1./err_arr**2)
     image[ubermask] = -np.inf
     image_filtered = image * 0.
+    a=0.02
     theFilter = np.array([[0.,a, 0.], [a, -4*a, a], [0., a, 0.]])  #Laplacian
     for i in xrange(3):
         for j in xrange(3):
