@@ -5,17 +5,17 @@ import esutil
 from scipy import ndimage
 import sys
 import galsim
-
+import matplotlib.cm as cm
 import cdmodel_functions
 
 
 #file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/omega-cen-ima-files/ibcj09ksq_ima.fits"
 #file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/omega-cen-ima-files/ibcj09kkq_ima.fits"
 #file_path="/Users/amalagon/WFIRST/WFC3_data/multiaccum_ima_files_omega_cen/ibcf81qkq_ima.fits"
-file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD153/ibcf0cvmq_ima.fits"
+#file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD153/ibcf0cvmq_ima.fits"
 #file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD71_G191B2B/ibcf90i1q_ima.fits"
 #file_path = "../../Data/ibcj09ksq_ima.fits" # path to file on Huff's machine.
-
+file_path = "../../Data/ibcf0cvmq_ima.fits" # path to file on Huff's machine.
 def apply_cdmodel (im, factor=1):
     """
     Uses galsim to apply "cdmodel" to an input image. 
@@ -148,13 +148,19 @@ def plot_average_pixel_trend(sci_arr, err_arr, mask_arr):
             max_interval = this_interval
     offset_array = (np.arange(nq) - np.mean(np.arange(nq))) * max_interval
 
-    fig,ax = plt.subplots()
+    fig,(ax1,ax2,ax3) = plt.subplots(nrows=1,ncols=3,figsize=(28,6))
+    colors = cm.seismic(np.linspace(0, 1, nq-1))
+    ax1.imshow(np.arcsinh(image))
+    ax2.imshow(image_filtered,cmap=cm.seismic,vmin = quant[1],vmax=-quant[1])
+    ax2.set_title("Laplacian-filtered image")
     for i in xrange(nq-1):
-        ax.plot((timeseries[i] + offset_array[i])[::-1])
+        ax3.plot((timeseries[i] + offset_array[i])[::-1],color=colors[i])
     fig.savefig("linearity_timeseries_trend.png")
-    ax.set_xlabel ("Time (arbitrary units)")
-    ax.set_ylabel ("Corrected pixel flux (e/sec)")
+    ax3.set_xlabel ("Time (arbitrary units)")
+    ax3.set_ylabel ("Corrected pixel flux (e/sec)")
 
+    fig.tight_layout()
+    fig.subplots_adjust(wspace=0.3)
     fig.show()
     stop
             
@@ -177,7 +183,7 @@ def main(argv):
     #w = 0.936
     #x = 0.0164
 
-    ## Laplacain kernel
+    ## Laplacian kernel
     a=0.02
 
     image_filtered = image * 0.
