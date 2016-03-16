@@ -103,7 +103,7 @@ def get_simulated_array (delta_time=10, n_ext=10):
 
 
 def make_chi2_map(sci_arr, err_arr, mask_arr):
-    mean_image = np.mean(sci_arr,axis=0)
+    mean_image = np.average(sci_arr,weights=1.0/err_arr**2, axis=0)
     deviant_arr = sci_arr - np.expand_dims(mean_image,axis=0)
     chisq = np.sum((deviant_arr/err_arr)**1,axis=0)
     chisq_dof = chisq*1./sci_arr.shape[0]
@@ -163,9 +163,9 @@ def main(argv):
 
     fig2, ax4 = plt.subplots(nrows=1,ncols=1,figsize=(7,7))
     #ax3.plot(image.flatten(),theMap.flatten(),',')
-    im_filtered_min, im_filtered_max = np.percentile (np.abs(image_filtered[use].flatten()), [5,95]  )
-    ax4.hist2d(np.abs(image_filtered[use].flatten()),np.abs(theMap[use].flatten()),norm=LogNorm(),
-               bins = [np.linspace(im_filtered_min - 0.5*np.abs(im_filtered_min), im_filtered_max +  0.5*np.abs(im_filtered_max),100),np.linspace(0,1.0,100)])
+    im_filtered_min, im_filtered_max = np.percentile ((image_filtered[use].flatten()), [5,95]  )
+    ax4.hist2d((image_filtered[use].flatten()),(theMap[use].flatten()),norm=LogNorm(),
+               bins = [np.linspace(im_filtered_min - 0.5*np.abs(im_filtered_min), im_filtered_max +  0.5*np.abs(im_filtered_max),100),np.linspace(-2.0,2.0,100)])
                #norm=LogNorm())
     ax4.axhline (0., linestyle="--")
     ax4.set_xlabel("(Laplacian filtered image value)**2")
