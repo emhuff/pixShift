@@ -9,8 +9,11 @@ import galsim
 import cdmodel_functions
 
 
-file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/ibcj09ksq_ima.fits"
-file_path="/Users/amalagon/WFIRST/WFC3_data/multiaccum_ima_files_omega_cen/ibcf81qkq_ima.fits"
+#file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/omega-cen-ima-files/ibcj09ksq_ima.fits"
+file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/omega-cen-ima-files/ibcj09kkq_ima.fits"
+#file_path="/Users/amalagon/WFIRST/WFC3_data/multiaccum_ima_files_omega_cen/ibcf81qkq_ima.fits"
+#file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD153/ibcf0cvmq_ima.fits"
+#file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD71_G191B2B/ibcf90i1q_ima.fits"
 
 def apply_cdmodel (im, factor=1):
     """
@@ -44,16 +47,16 @@ def get_image_array(file=file_path, ext_per_image = 5,
     sci_arr = np.array(sci_use)
     err_arr = np.array(err_use)
     mask_arr = np.array(mask_use)
-    return sci_arr, err_arr, mask_arr
+    return sci_arr, err_arr, 1.0*mask_arr
 
 
 def make_chi2_map(sci_arr, err_arr, mask_arr):
     mean_image = np.mean(sci_arr,axis=0)
     deviant_arr = sci_arr - np.expand_dims(mean_image,axis=0)
-    chisq = np.sum((deviant_arr/err_arr)**2,axis=0)
+    chisq = np.sum((deviant_arr/err_arr)**1,axis=0)
     chisq_dof = chisq*1./sci_arr.shape[0]
-    mask_summed = np.sum(mask_arr,axis=0) | ~np.isfinite(chisq)
-    chisq_dof[mask_summed != 0] = 0.
+    mask_summed = (np.sum(mask_arr,axis=0) > 0) | ~np.isfinite(chisq)  # bad guys
+    chisq_dof[mask_summed] = 0.
     return chisq_dof, mask_summed
 
 
@@ -69,13 +72,16 @@ def main(argv):
     im1 = ax1.imshow(theMap,vmin=0,vmax=2)
     image = np.mean(sci_arr,axis=0)
     image_sharp = image - ndimage.gaussian_filter(image,5.)
-    use = ubermask == 0
-    u = 0.0011
-    v = 0.0127
-    w = 0.936
-    x = 0.0164
+    use = ~ubermask
+    ## IPC:
+    #u = 0.0011
+    #v = 0.0127
+    #w = 0.936
+    #x = 0.0164
+    a=0.02
+
     image_filtered = image * 0.
-    theFilter = np.array([[u,v, u], [x, w, x], [u, v, u]])
+    theFilter = np.array([[0.,a, 0.], [a, -4*a, a], [0., a, 0.]])   # Laplacian
     for i in xrange(3):
         for j in xrange(3):
             image_filtered = image_filtered + theFilter[i,j] * image
@@ -89,14 +95,21 @@ def main(argv):
     fig.show()
 
     from matplotlib.colors import LogNorm
+
+    root= file_path.split('/')[-1].split('.')[0]
+    header=esutil.io.read_header (file_path)
+    name, time = header.get('TARGNAME').strip(), int(header.get ('EXPTIME'))
+
     fig2, ax4 = plt.subplots(nrows=1,ncols=1,figsize=(7,7))
     #ax3.plot(image.flatten(),theMap.flatten(),',')
-    ax4.hist2d((image_filtered[use].flatten()),np.log10(theMap[use].flatten()),norm=LogNorm(),
-               bins = [np.linspace(-0.005,0.005,100),np.linspace(-2,1,100)])
+    im_filtered_min, im_filtered_max = np.percentile (image_filtered[use].flatten(), [5,95]  )
+    ax4.hist2d((image_filtered[use].flatten()),(theMap[use].flatten()),norm=LogNorm(),
+               bins = [np.linspace(1.5*im_filtered_min, 1.5*im_filtered_max,100),np.linspace(-2,2,100)])
                #norm=LogNorm())
-    ax4.set_xlabel("ipc filtered image value")
-    ax4.set_ylabel("chi2")
-    fig2.savefig("flux_chisq_correlation.png")
+    ax4.axhline (0., linestyle="--")
+    ax4.set_xlabel("Laplacian filtered image value")
+    ax4.set_ylabel("chi")
+    fig2.savefig("flux_chis_corr_%s_%s_%g.png" %(root, name, time)  )
     fig2.show()
     stop
 
