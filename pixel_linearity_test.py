@@ -58,8 +58,8 @@ def get_simulated_array (delta_time=10, n_ext=10):
     sci = []
     err = []
     mask = []
-    
-    gal_flux_rate = 1.e6
+    sigma_noise = 2.
+    gal_flux_rate = 2.e3
     gal_fwhm = 0.4       # arcsec
     pixel_scale=0.11
     
@@ -67,26 +67,18 @@ def get_simulated_array (delta_time=10, n_ext=10):
     random_seed = 1234567
     rng = galsim.BaseDeviate(random_seed)
     base_size=32
-    
-    
-    sci_im=np.zeros((base_size, base_size))
-    err_im_temp=np.zeros(sci_im.shape)
 
     for ext in ext_all:
         
         profile=galsim.Gaussian(flux=gal_flux_rate, fwhm=gal_fwhm)
         sci_im=profile.drawImage(image=galsim.Image(base_size, base_size, dtype=np.float64), scale=pixel_scale)
-        #noise = galsim.PoissonNoise(rng)
-        #sci_im.addNoise(noise)
-        #sci_im+=sci_im # To correlate the noise
-        sci_im=sci_im.array
-        err_im=np.sqrt(sci_im)
-        mask_im=np.zeros(err_im.shape)
-        
-        sci_im+=sci_im
+        sci_im.addNoise(galsim.GaussianNoise(rng = rng, sigma=sigma_noise))
 
-        err_im = np.sqrt ( err_im_temp**2 +  err_im**2 )
-        err_temp = err_im
+        sci.append( sci_im.array )
+        err.append( sci_im.array*0.+ sigma_noise )
+        mask.append( sci_im.array * 0 )
+        
+
         
         sci.append(sci_im)
         err.append(err_im)
@@ -119,7 +111,7 @@ def plot_average_pixel_trend(sci_arr, err_arr, mask_arr):
     image = np.average(sci_arr,axis=0, weights = 1./err_arr**2)
     image[ubermask] = -np.inf
     image_filtered = image * 0.
-    a=0.02
+    a=0.1
     theFilter = np.array([[0.,a, 0.], [a, -4*a, a], [0., a, 0.]])  #Laplacian
     for i in xrange(3):
         for j in xrange(3):
@@ -154,7 +146,7 @@ def plot_average_pixel_trend(sci_arr, err_arr, mask_arr):
     ax2.imshow(image_filtered,cmap=cm.seismic,vmin = quant[1],vmax=-quant[1])
     ax2.set_title("Laplacian-filtered image")
     for i in xrange(nq-1):
-        ax3.plot((timeseries[i] + offset_array[i])[::-1],color=colors[i])
+        ax3.plot((timeseries[i] + offset_array[i])[::-1],color=colors[i],marker='.')
     fig.savefig("linearity_timeseries_trend.png")
     ax3.set_xlabel ("Time (arbitrary units)")
     ax3.set_ylabel ("Corrected pixel flux (e/sec)")
