@@ -13,9 +13,9 @@ import cdmodel_functions
 #file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/omega-cen-ima-files/ibcj09kkq_ima.fits"
 #file_path="/Users/amalagon/WFIRST/WFC3_data/multiaccum_ima_files_omega_cen/ibcf81qkq_ima.fits"
 #file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD153/ibcf0cvmq_ima.fits"
-#file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD71_G191B2B/ibcf90i1q_ima.fits"
+file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD71_G191B2B/ibcf90i1q_ima.fits"
 #file_path = "../../Data/ibcj09ksq_ima.fits" # path to file on Huff's machine.
-file_path = "../../Data/ibcf0cvmq_ima.fits" # path to file on Huff's machine.
+#file_path = "../../Data/ibcf0cvmq_ima.fits" # path to file on Huff's machine.
 def apply_cdmodel (im, factor=1):
     """
     Uses galsim to apply "cdmodel" to an input image. 
@@ -51,13 +51,14 @@ def get_image_array(file=file_path, ext_per_image = 5,
     return sci_arr, err_arr, 1.0*mask_arr
 
 
-def get_simulated_array (delta_time=10, n_ext=10):
+def get_simulated_array (delta_time=10, n_ext=5):
     import galsim
 
     ext_all = np.arange(1,n_ext+1)
     sci = []
     err = []
     mask = []
+    time=[]
     sigma_noise = 2.
     gal_flux_rate = 2.e3
     gal_fwhm = 0.4       # arcsec
@@ -66,28 +67,31 @@ def get_simulated_array (delta_time=10, n_ext=10):
     #time_vec = np.linspace (0., n_ext*delta_time, n_ext)
     random_seed = 1234567
     rng = galsim.BaseDeviate(random_seed)
-    base_size=32
+    base_size=512
 
     for ext in ext_all:
         
         profile=galsim.Gaussian(flux=gal_flux_rate, fwhm=gal_fwhm)
         sci_im=profile.drawImage(image=galsim.Image(base_size, base_size, dtype=np.float64), scale=pixel_scale)
         sci_im.addNoise(galsim.GaussianNoise(rng = rng, sigma=sigma_noise))
+        sci_im=apply_cdmodel(sci_im)
+        
+        
+        
 
         sci.append( sci_im.array )
         err.append( sci_im.array*0.+ sigma_noise )
         mask.append( sci_im.array * 0 )
-        
+    
+        time.append( sci_im.array*0 + ext*delta_time )
+    
+    time=np.array(time)
 
-        
-        sci.append(sci_im)
-        err.append(err_im)
-        mask.append(mask_im)
-
-    sci_arr = np.array(sci)
+    sci_arr = np.cumsum(np.array(sci), axis=0)/ time
     err_arr = np.array(err)
     mask_arr = np.array(mask)
-    
+
+
     return sci_arr, err_arr, mask_arr
 
 
@@ -158,10 +162,10 @@ def plot_average_pixel_trend(sci_arr, err_arr, mask_arr):
             
 def main(argv):
     
-    sci_arr, err_arr, mask_arr = get_image_array()
+    #sci_arr, err_arr, mask_arr = get_image_array()
+    sci_arr, err_arr, mask_arr = get_simulated_array(delta_time=5, n_ext=5)
     plot_average_pixel_trend(sci_arr, err_arr, mask_arr)
     
-    #sci_arr, err_arr, mask_arr = get_simulated_array(delta_time=10, n_ext=10)
 
     chi2Map, ubermask = make_chi2_map(sci_arr, err_arr, mask_arr)
     fig,(ax1,ax2) = plt.subplots(nrows=1,ncols=2,figsize=(14,7))
@@ -198,9 +202,9 @@ def main(argv):
     header=esutil.io.read_header (file_path)
     name, time = header.get('TARGNAME').strip(), int(header.get ('EXPTIME'))
 
-    #root='simulated_gaussian'
-    #name='andres'
-    #time=100
+    root='simulated_gaussian'
+    name='andres'
+    time=100
 
 
     fig2, ax4 = plt.subplots(nrows=1,ncols=1,figsize=(7,7))
