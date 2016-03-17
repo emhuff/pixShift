@@ -24,8 +24,9 @@ def apply_cdmodel (im, factor=1):
     """
     (aL,aR,aB,aT) = cdmodel_functions.readmeanmatrices()
     cd = galsim.cdmodel.BaseCDModel (factor*aL,factor*aR,factor*aB,factor*aT)
-    im=cd.applyForward(im)
-    return im
+    im_out=cd.applyForward(im)
+
+    return im_out
 
 
 
@@ -51,7 +52,7 @@ def get_image_array(file=file_path, ext_per_image = 5,
     return sci_arr, err_arr, 1.0*mask_arr
 
 
-def get_simulated_array (delta_time=10, n_ext=5):
+def get_simulated_array (delta_time=10, n_ext=5, doCD = False, factor=1):
     import galsim
 
     ext_all = np.arange(1,n_ext+1)
@@ -59,25 +60,23 @@ def get_simulated_array (delta_time=10, n_ext=5):
     err = []
     mask = []
     time=[]
-    sigma_noise = 2.
+    sigma_noise = .02
     gal_flux_rate = 2.e3
-    gal_fwhm = 0.4       # arcsec
-    pixel_scale=0.11
+    gal_fwhm = 0.5       # arcsec
+    pixel_scale=0.13
     
     #time_vec = np.linspace (0., n_ext*delta_time, n_ext)
     random_seed = 1234567
     rng = galsim.BaseDeviate(random_seed)
-    base_size=512
+    base_size=64
 
     for ext in ext_all:
         
         profile=galsim.Gaussian(flux=gal_flux_rate, fwhm=gal_fwhm)
         sci_im=profile.drawImage(image=galsim.Image(base_size, base_size, dtype=np.float64), scale=pixel_scale)
         sci_im.addNoise(galsim.GaussianNoise(rng = rng, sigma=sigma_noise))
-        sci_im=apply_cdmodel(sci_im)
-        
-        
-        
+        if doCD is True:
+            sci_im=apply_cdmodel(sci_im,factor=factor)
 
         sci.append( sci_im.array )
         err.append( sci_im.array*0.+ sigma_noise )
@@ -109,11 +108,13 @@ def make_chi2_map(sci_arr, err_arr, mask_arr):
 #    mean_image=np.mean(sci_arr, axis=0)
 #    deviant_arr = sci_arr - np.expand_dims(mean_image,axis=0)
 
-def plot_average_pixel_trend(sci_arr, err_arr, mask_arr):
+def plot_average_pixel_trend(sci_arr, err_arr, mask_arr, scale = 0.13,
+                             doPlot = True, doCD = False,factor=1):
     chi2Map, ubermask = make_chi2_map(sci_arr, err_arr, mask_arr)
     use = ~ubermask  #Negating the bad guys
     image = np.average(sci_arr,axis=0, weights = 1./err_arr**2)
     image[ubermask] = -np.inf
+    '''
     image_filtered = image * 0.
     a=0.1
     theFilter = np.array([[0.,a, 0.], [a, -4*a, a], [0., a, 0.]])  #Laplacian
@@ -121,7 +122,11 @@ def plot_average_pixel_trend(sci_arr, err_arr, mask_arr):
         for j in xrange(3):
             image_filtered = image_filtered + theFilter[i,j] * image
     image_filtered-=image
+    '''
+    image_filtered = apply_cdmodel (galsim.Image(image,scale=scale), factor= factor).array - image
+    
     image_filtered[ubermask | ~np.isfinite(image_filtered)] = 0.
+
     # Bin the filtered image values into quantiles.
     nq = 10
     quant = np.percentile(image_filtered[use].flatten(), np.linspace(0,100,nq))
@@ -143,30 +148,40 @@ def plot_average_pixel_trend(sci_arr, err_arr, mask_arr):
         if this_interval > max_interval:
             max_interval = this_interval
     offset_array = (np.arange(nq) - np.mean(np.arange(nq))) * max_interval
-
-    fig,(ax1,ax2,ax3) = plt.subplots(nrows=1,ncols=3,figsize=(28,6))
-    colors = cm.seismic(np.linspace(0, 1, nq-1))
-    ax1.imshow(np.arcsinh(image))
-    ax2.imshow(image_filtered,cmap=cm.seismic,vmin = quant[1],vmax=-quant[1])
-    ax2.set_title("Laplacian-filtered image")
-    for i in xrange(nq-1):
-        ax3.plot((timeseries[i] + offset_array[i])[::-1],color=colors[i],marker='.')
-    fig.savefig("linearity_timeseries_trend.png")
-    ax3.set_xlabel ("Time (arbitrary units)")
-    ax3.set_ylabel ("Corrected pixel flux (e/sec)")
-
-    fig.tight_layout()
-    fig.subplots_adjust(wspace=0.3)
-    fig.show()
-    stop
+    if doPlot is True:
+        fig,(ax1,ax2,ax3) = plt.subplots(nrows=1,ncols=3,figsize=(28,6))
+        colors = cm.seismic(np.linspace(0, 1, nq-1))
+        ax1.imshow(np.arcsinh(image))
+        ax2.imshow(image_filtered,cmap=cm.seismic,vmin = quant[1],vmax=-quant[1])
+        ax2.set_title("Laplacian-filtered image")
+        for i in xrange(nq-1):
+            ax3.plot((timeseries[i] + offset_array[i])[::-1],color=colors[i],marker='.')
+        fig.savefig("linearity_timeseries_trend.png")
+        ax3.set_xlabel ("Time (arbitrary units)")
+        ax3.set_ylabel ("Corrected pixel flux (e/sec)")
+    
+        fig.tight_layout()
+        fig.subplots_adjust(wspace=0.3)
+        fig.show()
+    timeseries_offset = [ts + os for ts,os in zip(timeseries,offset_array)]
+    return timeseries_offset
             
 def main(argv):
     
     #sci_arr, err_arr, mask_arr = get_image_array()
-    sci_arr, err_arr, mask_arr = get_simulated_array(delta_time=5, n_ext=5)
-    plot_average_pixel_trend(sci_arr, err_arr, mask_arr)
-    
+    sci_arr_nocd, err_arr_nocd, mask_arr_nocd = get_simulated_array(delta_time=5, n_ext=10, doCD = False)
+    sci_arr_cd, err_arr_cd, mask_arr_cd = get_simulated_array(delta_time=5, n_ext=10, doCD = True, factor=1)
+    timeseries_nocd = plot_average_pixel_trend(sci_arr_nocd, err_arr_nocd, mask_arr_nocd,doPlot= True)
+    timeseries_cd = plot_average_pixel_trend(sci_arr_cd, err_arr_cd, mask_arr_cd,doPlot= False)
 
+    fig,ax = plt.subplots()
+    for tnocd,tcd in zip(timeseries_nocd,timeseries_cd):
+        ax.plot((tcd - tnocd)[::-1])
+    fig.show()
+    stop
+
+    
+    '''
     chi2Map, ubermask = make_chi2_map(sci_arr, err_arr, mask_arr)
     fig,(ax1,ax2) = plt.subplots(nrows=1,ncols=2,figsize=(14,7))
     im1 = ax1.imshow(chi2Map,vmin=0,vmax=2)
@@ -219,7 +234,7 @@ def main(argv):
     fig2.savefig("flux_chi2_corr_%s_%s_%g.png" %(root, name, time)  )
     fig2.show()
     stop
-
+    '''
  
 if __name__ == "__main__":
     import pdb, traceback
