@@ -22,8 +22,12 @@ def apply_cdmodel (im, factor=1):
     return im_out
 
 
-def get_simulated_array (delta_time=10, n_ext=10, doCD = False, factor=1, n_stars = 1):
+def get_simulated_array (delta_time=10, n_ext=10, doCD = False, factor=1, base_size=64,
+ offsets = None):
     import galsim
+    
+    
+    n_stars = len(offsets)
 
     ext_all = np.arange(1,n_ext+1)
     sci = []
@@ -38,17 +42,22 @@ def get_simulated_array (delta_time=10, n_ext=10, doCD = False, factor=1, n_star
     #time_vec = np.linspace (0., n_ext*delta_time, n_ext)
     #random_seed = 1234568
     rng = galsim.BaseDeviate()
-    base_size=64
 
     for ext in ext_all:
         
         profile=galsim.Gaussian(flux=gal_flux_rate, fwhm=gal_fwhm)
-        sci_im=profile.drawImage(image=galsim.Image(base_size, base_size, dtype=np.float64), scale=pixel_scale)
         if n_stars > 1:
+            sci_im=profile.drawImage(image=galsim.Image(base_size, base_size, dtype=np.float64), scale=pixel_scale, offset=offsets[0])
+
             for i in xrange(n_stars-1):
                 sci_im = sci_im + profile.drawImage(image=
                                                     galsim.Image(base_size, base_size, dtype=np.float64),
-                                                    scale=pixel_scale,offset=np.random.rand(2)*base_size/2.)
+                                                    scale=pixel_scale,offset=offsets[i])
+    
+        else:
+            sci_im=profile.drawImage(image=galsim.Image(base_size, base_size, dtype=np.float64), scale=pixel_scale)
+        
+    
         sci_im.addNoise(galsim.GaussianNoise(rng = rng, sigma=sigma_noise))
         if doCD is True:
             sci_im=apply_cdmodel(sci_im,factor=factor)
@@ -84,34 +93,51 @@ def get_final_image(sci_arr, err_arr, mask_arr):
 
 def estimator(sci_arr, err_arr, mask_arr ):
 
-    I_pred = get_predicted_final_image(sci_arr, err_arr, mask_arr)
-    I_act = get_final_image(sci_arr, err_arr, mask_arr)
-    image_obj_pred = galsim.Image(I_pred)
-    cd_deriv = get_cd_deriv(image_obj_pred)
-    # Cinv will just be a 2D array the same size as a the predicted data vector.
-    # because we're assuming the pixel noise is uncorrelated. (Ha!)
-    Cinv = get_predicted_final_cinv(err_arr, mask_arr)
+    n_ext=sci_arr.shape[0]
+    est_vec, est_err_vec =[],[]
 
-    est_num = np.dot( (I_act - I_pred).flatten(), cd_deriv.array.flatten() * Cinv.flatten())
-    est_denom = np.dot( cd_deriv.array.flatten() * Cinv.flatten(), cd_deriv.array.flatten())
+    for i in range(n_ext-1):
+        #I_pred = get_predicted_final_image(sci_arr, err_arr, mask_arr)
+        #I_act = get_final_image(sci_arr, err_arr, mask_arr)
+        I_pred = sci_arr[i+1,:,:]
+        I_act  = sci_arr[i,:,:]
+        
+        image_obj_pred = galsim.Image(I_pred)
+        cd_deriv = get_cd_deriv(image_obj_pred)
+        # Cinv will just be a 2D array the same size as a the predicted data vector.
+        # because we're assuming the pixel noise is uncorrelated. (Ha!)
+        Cinv = get_predicted_final_cinv(err_arr, mask_arr)
 
-    est = est_num/est_denom
-    est_err = 1./np.sqrt(est_denom)
-    return est, est_err
+        est_num = np.dot( (I_act - I_pred).flatten(), cd_deriv.array.flatten() * Cinv.flatten())
+        est_denom = np.dot( cd_deriv.array.flatten() * Cinv.flatten(), cd_deriv.array.flatten())
+
+        est = est_num/est_denom
+        est_err = 1./np.sqrt(est_denom)
+
+        est_vec.append(est)
+        est_err_vec.append(est_err)
+
+    est_vec, est_err_vec = np.array(est_vec), np.array(est_err_vec)
+
+    return np.mean(est_vec), np.sqrt ( np.mean(est_err**2*1.0/(n_ext-1)) )
 
 
 def main (argv):
-    n=10
+    n=1000
     
     sum_est_cd, sum_est_var_cd = 0.0, 0.0
     sum_est_nocd, sum_est_var_nocd = 0.0, 0.0
     all_est_cd = np.zeros(n)
     all_est_nocd = np.zeros(n)
+    base_size=64
+    n_stars = 10
+
+    offsets_vec=[ base_size/2. * np.random.rand(2) for i in xrange(n_stars) ]
     for i in xrange(n):
 
 
-        sci_arr_cd, err_arr_cd, mask_arr_cd = get_simulated_array (delta_time=10, n_ext=10, doCD = True, factor=1.5)
-        sci_arr_nocd, err_arr_nocd, mask_arr_nocd = get_simulated_array (delta_time=10, n_ext=10, doCD = False)
+        sci_arr_cd, err_arr_cd, mask_arr_cd = get_simulated_array (delta_time=10, n_ext=10, doCD = True, factor=1.5, offsets=offsets_vec, base_size= base_size)
+        sci_arr_nocd, err_arr_nocd, mask_arr_nocd = get_simulated_array (delta_time=10, n_ext=10, doCD = False, offsets=offsets_vec, base_size= base_size)
 
     
         est_cd, est_err_cd = estimator (sci_arr_cd, err_arr_cd, mask_arr_cd )
