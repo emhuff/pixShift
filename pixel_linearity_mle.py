@@ -22,7 +22,7 @@ def apply_cdmodel (im, factor=1):
     return im_out
 
 
-def get_simulated_array (delta_time=10, n_ext=10, doCD = False, factor=1):
+def get_simulated_array (delta_time=10, n_ext=10, doCD = False, factor=1, n_stars = 1):
     import galsim
 
     ext_all = np.arange(1,n_ext+1)
@@ -30,7 +30,7 @@ def get_simulated_array (delta_time=10, n_ext=10, doCD = False, factor=1):
     err = []
     mask = []
     time=[]
-    sigma_noise = .02
+    sigma_noise = .10
     gal_flux_rate = 2.e3
     gal_fwhm = 0.5       # arcsec
     pixel_scale=0.13
@@ -44,6 +44,11 @@ def get_simulated_array (delta_time=10, n_ext=10, doCD = False, factor=1):
         
         profile=galsim.Gaussian(flux=gal_flux_rate, fwhm=gal_fwhm)
         sci_im=profile.drawImage(image=galsim.Image(base_size, base_size, dtype=np.float64), scale=pixel_scale)
+        if n_stars > 1:
+            for i in xrange(n_stars-1):
+                sci_im = sci_im + profile.drawImage(image=
+                                                    galsim.Image(base_size, base_size, dtype=np.float64),
+                                                    scale=pixel_scale,offset=np.random.rand(2)*base_size/2.)
         sci_im.addNoise(galsim.GaussianNoise(rng = rng, sigma=sigma_noise))
         if doCD is True:
             sci_im=apply_cdmodel(sci_im,factor=factor)
@@ -100,28 +105,29 @@ def main (argv):
     sum_est_cd, sum_est_var_cd = 0.0, 0.0
     sum_est_nocd, sum_est_var_nocd = 0.0, 0.0
 
-    n=100
+    n=1000
     for i in xrange(n):
 
 
-        sci_arr_cd, err_arr_cd, mask_arr_cd = get_simulated_array (delta_time=10, n_ext=10, doCD = True, factor=1)
-        sci_arr_nocd, err_arr_nocd, mask_arr_nocd = get_simulated_array (delta_time=10, n_ext=10, doCD = False, factor=1)
+        sci_arr_cd, err_arr_cd, mask_arr_cd = get_simulated_array (delta_time=10, n_ext=10, doCD = True, factor=1.5)
+        sci_arr_nocd, err_arr_nocd, mask_arr_nocd = get_simulated_array (delta_time=10, n_ext=10, doCD = False)
 
     
         est_cd, est_err_cd = estimator (sci_arr_cd, err_arr_cd, mask_arr_cd )
         est_nocd, est_err_nocd = estimator (sci_arr_nocd, err_arr_nocd, mask_arr_nocd )
-        print "yes CD: ", est_cd, est_err_cd
-        print "no CD: ", est_nocd, est_err_nocd
     
         sum_est_cd+=est_cd
         sum_est_var_cd+=est_err_cd**2
     
         sum_est_nocd+=est_nocd
         sum_est_var_nocd+=est_err_nocd**2
+        print "cumulative yes CD: ", i, sum_est_cd*1./i, np.sqrt(sum_est_var_cd)*1./i
+        print "cumulative no CD: ", i,sum_est_nocd*1./i, np.sqrt(sum_est_var_nocd)*1./i
+        
     
     print " "
-    print "Final yes CD: ", sum_est_cd*1./n, np.sqrt (sum_est_var_cd*1./n)
-    print "final no CD: ", sum_est_nocd*1./n, np.sqrt (sum_est_var_nocd*1./n)
+    print "Final yes CD: ", sum_est_cd*1./n, np.sqrt (sum_est_var_cd*1./n**2)
+    print "final no CD: ", sum_est_nocd*1./n, np.sqrt (sum_est_var_nocd*1./n**2)
     
     stop
 
