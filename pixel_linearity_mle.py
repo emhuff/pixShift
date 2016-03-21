@@ -101,11 +101,12 @@ def estimator(sci_arr, err_arr, mask_arr ):
 
 
 def main (argv):
+    n=10
     
     sum_est_cd, sum_est_var_cd = 0.0, 0.0
     sum_est_nocd, sum_est_var_nocd = 0.0, 0.0
-
-    n=1000
+    all_est_cd = np.zeros(n)
+    all_est_nocd = np.zeros(n)
     for i in xrange(n):
 
 
@@ -115,7 +116,9 @@ def main (argv):
     
         est_cd, est_err_cd = estimator (sci_arr_cd, err_arr_cd, mask_arr_cd )
         est_nocd, est_err_nocd = estimator (sci_arr_nocd, err_arr_nocd, mask_arr_nocd )
-    
+        all_est_cd[i] = est_cd
+        all_est_nocd[i] = est_nocd
+        
         sum_est_cd+=est_cd
         sum_est_var_cd+=est_err_cd**2
     
@@ -128,7 +131,9 @@ def main (argv):
     print " "
     print "Final yes CD: ", sum_est_cd*1./n, np.sqrt (sum_est_var_cd*1./n**2)
     print "final no CD: ", sum_est_nocd*1./n, np.sqrt (sum_est_var_nocd*1./n**2)
-    
+    print "empirical stdev. (CD): ", np.std(all_est_cd), np.std(all_est_cd)/ np.sqrt(n)
+    print "empirical stdev. (noCD): ",np.std(all_est_nocd) ,np.std(all_est_nocd) / np.sqrt(n)
+        
     stop
 
 
