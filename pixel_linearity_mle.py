@@ -9,16 +9,22 @@ import matplotlib.cm as cm
 import cdmodel_functions
 
 
-def apply_cdmodel (im, factor=1):
+def apply_cdmodel (im, factor=0.01):
     """
     Uses galsim to apply "cdmodel" to an input image. 
     "cdmodel" ('charge deflection') is an implementation of the 'brightter-fatter'
     model by Antilogus et al 2014 as performed by Gruen et al 2015.
     """
-    (aL,aR,aB,aT) = cdmodel_functions.readmeanmatrices()
-    cd = galsim.cdmodel.BaseCDModel (factor*aL,factor*aR,factor*aB,factor*aT)
-    im_out=cd.applyForward(im)
-
+    #(aL,aR,aB,aT) = cdmodel_functions.readmeanmatrices()
+    #cd = galsim.cdmodel.BaseCDModel (factor*aL,factor*aR,factor*aB,factor*aT)
+    #im_out=cd.applyForward(im)
+    
+    
+    f=lambda x,beta : x + beta*x*x
+    im_out=im.copy()
+    im_out.applyNonlinearity(f,factor)
+    
+    #stop
     return im_out
 
 
@@ -77,9 +83,10 @@ def get_simulated_array (delta_time=10, n_ext=10, doCD = False, factor=1, base_s
 
     return sci_arr, err_arr, mask_arr
 
-def get_cd_deriv(image_obj, delta_factor = 1.0):
+def get_cd_deriv(image_obj, delta_factor = 0.01):
     image_obj_p = apply_cdmodel(image_obj,factor = delta_factor)
     delta_image_obj = (image_obj_p - image_obj) / delta_factor
+    #stop
     return delta_image_obj
 
 def get_predicted_final_image(sci_arr, err_arr, mask_arr):
@@ -91,7 +98,7 @@ def get_predicted_final_cinv(err_arr, mask_arr):
 def get_final_image(sci_arr, err_arr, mask_arr):
     return sci_arr[0,:,:]
 
-def estimator(sci_arr, err_arr, mask_arr ):
+def estimator(sci_arr, err_arr, mask_arr):
 
     n_ext=sci_arr.shape[0]
     est_vec, est_err_vec =[],[]
@@ -116,6 +123,7 @@ def estimator(sci_arr, err_arr, mask_arr ):
 
         est_vec.append(est)
         est_err_vec.append(est_err)
+        #stop
 
     est_vec, est_err_vec = np.array(est_vec), np.array(est_err_vec)
 
@@ -123,25 +131,26 @@ def estimator(sci_arr, err_arr, mask_arr ):
 
 
 def main (argv):
-    n=1000
+    n=100
     
     sum_est_cd, sum_est_var_cd = 0.0, 0.0
     sum_est_nocd, sum_est_var_nocd = 0.0, 0.0
     all_est_cd = np.zeros(n)
     all_est_nocd = np.zeros(n)
-    base_size=64
-    n_stars = 10
+    base_size=512
+    n_stars = 100
+    factor = 0.02
 
     offsets_vec=[ base_size/2. * np.random.rand(2) for i in xrange(n_stars) ]
     for i in xrange(n):
 
 
-        sci_arr_cd, err_arr_cd, mask_arr_cd = get_simulated_array (delta_time=10, n_ext=10, doCD = True, factor=1.5, offsets=offsets_vec, base_size= base_size)
+        sci_arr_cd, err_arr_cd, mask_arr_cd = get_simulated_array (delta_time=10, n_ext=10, doCD = True, factor=factor, offsets=offsets_vec, base_size= base_size)
         sci_arr_nocd, err_arr_nocd, mask_arr_nocd = get_simulated_array (delta_time=10, n_ext=10, doCD = False, offsets=offsets_vec, base_size= base_size)
-
+        #stop
     
-        est_cd, est_err_cd = estimator (sci_arr_cd, err_arr_cd, mask_arr_cd )
-        est_nocd, est_err_nocd = estimator (sci_arr_nocd, err_arr_nocd, mask_arr_nocd )
+        est_cd, est_err_cd = estimator (sci_arr_cd, err_arr_cd, mask_arr_cd)
+        est_nocd, est_err_nocd = estimator (sci_arr_nocd, err_arr_nocd, mask_arr_nocd)
         all_est_cd[i] = est_cd
         all_est_nocd[i] = est_nocd
         
