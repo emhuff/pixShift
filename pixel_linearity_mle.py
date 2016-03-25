@@ -18,8 +18,7 @@ def apply_nonlinearity (im, factor=0.01, doCD = True):
     if doCD is True:
         (aL,aR,aB,aT) = cdmodel_functions.readmeanmatrices()
         cd = galsim.cdmodel.BaseCDModel (factor*aL,factor*aR,factor*aB,factor*aT)
-        im_out=cd.applyForward(im)
-    
+        im_out=cd.applyForward(im.copy())
     else:
         f=lambda x,beta : x + beta*x*x
         im_out=im.copy()
@@ -27,52 +26,71 @@ def apply_nonlinearity (im, factor=0.01, doCD = True):
     
     return im_out
 
-
-def get_simulated_array (delta_time=10, n_ext=10, doCD = False, factor=1, base_size=64, offsets = None):
-    import galsim
+def get_true_flux(offsets = None, base_size = 64):
+    sigma_noise = .10
+    gal_flux_rate = 2.e4
+    gal_fwhm = 0.5       # arcsec
+    pixel_scale=0.13
+    profile=galsim.Gaussian(flux=gal_flux_rate, fwhm=gal_fwhm)
     n_stars = len(offsets)
+    if n_stars > 1:
+        sci_im=profile.drawImage(image=galsim.Image(base_size, base_size, dtype=np.float64), scale=pixel_scale, offset=offsets[0])
+        for i in xrange(1,n_stars):
+            sci_im = sci_im + profile.drawImage(image= galsim.Image(base_size, base_size, dtype=np.float64),
+                                                scale=pixel_scale,offset=offsets[i])
+    else:
+        sci_im=profile.drawImage(image=galsim.Image(base_size, base_size, dtype=np.float64), scale=pixel_scale)
+
+    return sci_im
+
+            
+
+def get_simulated_array (delta_time=10, n_ext=10, doCD = False, factor=1., base_size=64, offsets = None, addNoise = True, true_flux = None):
+    import galsim
     ext_all = np.arange(1,n_ext+1)
     sci = []
     err = []
     mask = []
     time=[]
     sigma_noise = .10
-    gal_flux_rate = 2.e4
+    gal_flux_rate = 2.e5
     gal_fwhm = 0.5       # arcsec
     pixel_scale=0.13
     #time_vec = np.linspace (0., n_ext*delta_time, n_ext)
-    #random_seed = 1234568
-    rng = galsim.BaseDeviate()
+    random_seed = 1234568
+    rng = galsim.BaseDeviate(random_seed)
+    if true_flux == None:
+        true_flux = get_true_flux( offsets = offsets, base_size =  base_size )
+    
     for ext in ext_all:
-        profile=galsim.Gaussian(flux=gal_flux_rate, fwhm=gal_fwhm)
-        if n_stars > 1:
-            sci_im=profile.drawImage(image=galsim.Image(base_size, base_size, dtype=np.float64), scale=pixel_scale, offset=offsets[0])
-            for i in xrange(1,n_stars):
-                sci_im = sci_im + profile.drawImage(image=
-                                                    galsim.Image(base_size, base_size, dtype=np.float64),
-                                                    scale=pixel_scale,offset=offsets[i])
+        if len(sci) == 0:
+            sci_im = true_flux * delta_time
         else:
-            sci_im=profile.drawImage(image=galsim.Image(base_size, base_size, dtype=np.float64), scale=pixel_scale)
-        
-        sci_im.addNoise(galsim.GaussianNoise(rng = rng, sigma=sigma_noise))
+            sci_im = true_flux * delta_time + sci[-1]
         if doCD == True:
-            sci_im=apply_nonlinearity(sci_im,factor=factor)
+            sci_im = apply_nonlinearity( sci_im , factor = factor )
+        if addNoise == True:
+            sci_im.addNoise(galsim.GaussianNoise(rng = rng, sigma=sigma_noise))
+        if len(sci) == 0:
+            sci.append( sci_im.array )
+            err.append( sci_im.array * 0. + (sigma_noise *  delta_time) )
+        else:
+            sci.append( sci_im.array )
+            err.append( np.sqrt( ((sigma_noise*delta_time)**2 + err[-1]**2)) )
 
-        sci.append( sci_im.array * delta_time )
-        err.append( sci_im.array * 0. + sigma_noise *  delta_time)
         mask.append( sci_im.array * 0 )
 
         time.append( sci_im.array*0 + ext*delta_time )
     
     time=np.array(time)
 
-    sci_arr = np.cumsum(np.array(sci),axis=0) / time
-    
-    err_arr = np.sqrt(np.cumsum(np.array(err)**2,axis=0)) / time
+    sci_arr = np.array(sci) / time
+    err_arr = np.array(err) / time
     mask_arr = np.array(mask)
     return sci_arr, err_arr, mask_arr
 
-def get_predicted_sci_array(sci_arr,delta_time=10, n_ext=10, doCD = False, factor=1, pixel_scale = 0.13):
+def get_predicted_sci_array(sci_arr_in,delta_time=10, n_ext=10, doCD = False, factor=1, pixel_scale = 0.13):
+    sci_arr = sci_arr_in.copy()
     this_sci_im =  sci_arr[0,:,:] * delta_time
     sci_im = [this_sci_im]
     err = []
@@ -85,16 +103,15 @@ def get_predicted_sci_array(sci_arr,delta_time=10, n_ext=10, doCD = False, facto
             this_sci_im = apply_nonlinearity(this_sci_im, factor = factor)
         sci_im.append( this_sci_im.array )
         time.append( this_sci_arr * 0. + (i+1) * delta_time)
-
+    
     time = np.array(time)
     sci_arr_pred = np.array(sci_im)/time
     return sci_arr_pred
     
 
-def get_cd_deriv(image_obj, delta_factor = 0.01):
+def get_cd_deriv(imae_obj, delta_factor = 0.01):
     image_obj_p = apply_nonlinearity(image_obj,factor = delta_factor)
     delta_image_obj = (image_obj_p - image_obj) / delta_factor
-    #stop
     return delta_image_obj
 
 def get_predicted_final_image(sci_arr, err_arr, mask_arr):
@@ -123,7 +140,6 @@ def estimator(sci_arr, err_arr, mask_arr, delta_time = 10., delta_factor = .10, 
     est_denom = np.dot( cd_deriv.flatten() * Cinv.flatten(), cd_deriv.flatten() )
     
     est, est_err = est_num / est_denom, 1./np.sqrt(est_denom)
-    stop
     return est, est_err
 
 
@@ -135,9 +151,9 @@ def main (argv):
     all_est_nocd = np.zeros(n)
     base_size=32
     n_stars = 2
-    factor = 1.
+    factor = 1.25
 
-    offsets_vec=[ base_size/2. * np.random.rand(2) for i in xrange(n_stars) ]
+    offsets_vec=[np.zeros(2)]#[ base_size/2. * np.random.rand(2) for i in xrange(n_stars) ]
     for i in xrange(n):
         sci_arr_cd, err_arr_cd, mask_arr_cd = get_simulated_array (delta_time=10, n_ext=10, doCD = True, factor=factor, offsets=offsets_vec, base_size= base_size)
         sci_arr_nocd, err_arr_nocd, mask_arr_nocd = get_simulated_array (delta_time=10, n_ext=10, doCD = False, offsets=offsets_vec, base_size= base_size)
