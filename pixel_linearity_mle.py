@@ -35,7 +35,7 @@ def get_image_data(file=file_path, ext_per_image = 5, exclude_last = 3):
     sci_arr = np.array(sci_use)
     err_arr = np.array(err_use)
     mask_arr = np.array(mask_use)
-    return sci_arr, err_arr, 1.0*mask_arr
+    return sci_arr[::-1,:,:], err_arr[::-1,:,:], 1.0*mask_arr[::-1,:,:]
 
 def apply_nonlinearity (im, factor=0.01, doCD = True):
     """
@@ -142,9 +142,11 @@ def estimator(sci_arr, err_arr, mask_arr, delta_time = 10., delta_factor = .10, 
 
 
 def main (argv):
-    simulate = True
+    simulate = False
 
-    
+    #file_path = "../../Data/ibcj09ksq_ima.fits" # path to file on Huff's machine.
+    #file_path = "../../Data/ibcf0cvmq_ima.fits" # path to file on Huff's machine.
+    file_path = ["../../Data/ibcf0cvmq_ima.fits", "../../Data/ibcj09ksq_ima.fits"] # path to file on Huff's machine.
     n=100
     sum_est_cd, sum_est_var_cd = 0.0, 0.0
     sum_est_nocd, sum_est_var_nocd = 0.0, 0.0
@@ -156,18 +158,20 @@ def main (argv):
 
     offsets_vec= [ base_size *( np.random.rand(2) - 1) for i in xrange(n_stars) ]
     for i in xrange(n):
+        this_file_path = file_path[i]
         if simulate is True:
             true_flux = get_true_flux(offsets=offsets_vec, base_size = base_size)
             sci_arr_cd, err_arr, mask_arr = get_simulated_array (delta_time=10, n_ext=10, doCD = True, factor=factor, true_flux = true_flux)
             sci_arr_nocd, _, _ = get_simulated_array (delta_time=10, n_ext=10, doCD = False, true_flux = true_flux)
         else:
-            true_flux, err_arr, mask_arr = 'something from the data array'
+            sci_arr, err_arr, mask_arr = get_image_data(file=this_file_path, ext_per_image = 5, exclude_last = 3)
+            true_flux = galsim.Image(sci_arr[0,:,:],scale = 0.13)
             sci_arr_cd, _, _ = get_simulated_array (delta_time=10, n_ext=10, doCD = True, factor=factor, true_flux = true_flux)
             sci_arr_nocd, _, _ = get_simulated_array (delta_time=10, n_ext=10, doCD = False, true_flux = true_flux)
 
         est_cd, est_err_cd = estimator (sci_arr_cd, err_arr, mask_arr)
         est_nocd, est_err_nocd = estimator (sci_arr_nocd, err_arr, mask_arr)
-        #print est_cd, est_nocd
+        print est_cd, est_nocd
         all_est_cd[i] = est_cd
         all_est_nocd[i] = est_nocd
         
