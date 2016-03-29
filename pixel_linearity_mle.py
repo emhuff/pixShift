@@ -7,15 +7,21 @@ import sys
 import galsim
 import matplotlib.cm as cm
 import cdmodel_functions
+import fitsio
+import subprocess as S
 
+file_path1="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/omega-cen-ima-files/ibcj09ksq_ima.fits"
+file_path2="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/omega-cen-ima-files/ibcj09kkq_ima.fits"
 
-#file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/omega-cen-ima-files/ibcj09ksq_ima.fits"
-#file_path="/Users/amalagon/WFIRST/WFC3_data/data/omega-cen-all_data/omega-cen-ima-files/ibcj09kkq_ima.fits"
-#file_path="/Users/amalagon/WFIRST/WFC3_data/multiaccum_ima_files_omega_cen/ibcf81qkq_ima.fits"
-#file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD153/ibcf0cvmq_ima.fits"
-file_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD71_G191B2B/ibcf90i1q_ima.fits"
+file_path3="/Users/amalagon/WFIRST/WFC3_data/multiaccum_ima_files_omega_cen/ibcf81qkq_ima.fits"    # star
+file_path4="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD153/ibcf0cvmq_ima.fits"
+file_path5="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD71_G191B2B/ibcf90i1q_ima.fits"
 #file_path = "../../Data/ibcj09ksq_ima.fits" # path to file on Huff's machine.
-#file_path = "../../Data/ibcf0cvmq_ima.fits" # path to file on Huff's machine.
+file_path = "../../Data/ibcf0cvmq_ima.fits" # path to file on Huff's machine.
+
+
+all_files_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/all_files/"
+GD71_G191B2B_files_path="/Users/amalagon/WFIRST/WFC3_data/data/standard-stars-hst/GD71_G191B2B/"
 
 def get_image_data(file=file_path, ext_per_image = 5, exclude_last = 3):
     hdr = esutil.io.read_header(file)
@@ -28,7 +34,7 @@ def get_image_data(file=file_path, ext_per_image = 5, exclude_last = 3):
         sci.append(esutil.io.read(file,ext=ext))
         err.append(esutil.io.read(file,ext=ext+1))
         mask.append(esutil.io.read(file,ext=ext+2))
-                   
+
     sci_use = sci[0:-exclude_last]
     err_use = err[0:-exclude_last]
     mask_use = mask[0:-exclude_last]
@@ -106,12 +112,15 @@ def get_simulated_array (delta_time=10, n_ext=10, doCD = False, factor=1., base_
         else:
             sci.append( sci_im.array )
             err.append( np.sqrt( ((sigma_noise*delta_time)**2 + err[-1]**2)) )
-        this_mask = sci_im.array * 0
+        this_mask = np.zeros(sci_im.array.shape)    #* 0.
+        #np.seterr(all='raise')
+        #stop
         #this_mask[12,:] = 1
         mask.append( this_mask )
 
-        time.append( sci_im.array*0 + ext*delta_time )
-    
+        #time.append( sci_im.array*0. + ext*delta_time )
+        time.append(np.zeros(sci_im.array.shape) + ext*delta_time)
+
     time=np.array(time)
 
     sci_arr = np.array(sci) / time
@@ -133,11 +142,12 @@ def estimator(sci_arr, err_arr, mask_arr, delta_time = 10., delta_factor = .10, 
     cd_deriv = (sci_pred_p - sci_pred_0) * (1. / delta_factor)
     Cinv = 1./err_arr**2
     diff = sci_arr - sci_pred_0
-    use = (mask_arr == 0.)
+    use = (err_arr > 0.) & (mask_arr == 0)
 
-    est_num = np.dot ( cd_deriv[use], diff[use] * Cinv[use])
+    est_num = np.dot ( cd_deriv[use], diff[use] * Cinv[use])    # become 1D vectors
     est_denom = np.dot( cd_deriv[use] * Cinv[use], cd_deriv[use] )
     est, est_err = est_num / est_denom, 1./np.sqrt(est_denom)
+    #stop
     return est, est_err
 
 
@@ -146,15 +156,24 @@ def main (argv):
 
     #file_path = "../../Data/ibcj09ksq_ima.fits" # path to file on Huff's machine.
     #file_path = "../../Data/ibcf0cvmq_ima.fits" # path to file on Huff's machine.
-    file_path = ["../../Data/ibcf0cvmq_ima.fits", "../../Data/ibcj09ksq_ima.fits"] # path to file on Huff's machine.
-    n=100
+    #file_path = ["../../Data/ibcf0cvmq_ima.fits", "../../Data/ibcj09ksq_ima.fits"] # path to file on Huff's machine.
+    #file_path=[file_path2] #, file_path4, file_path5]
+    cmd="ls %s*ima*.fits" %GD71_G191B2B_files_path
+    file_path=S.Popen([cmd], shell=True, stdout=S.PIPE).communicate()[0].split()
+
+
+    n=len(file_path)
     sum_est_cd, sum_est_var_cd = 0.0, 0.0
     sum_est_nocd, sum_est_var_nocd = 0.0, 0.0
     all_est_cd = np.zeros(n)
     all_est_nocd = np.zeros(n)
     base_size=64
     n_stars = 3
-    factor = 1.5
+    factor = 2.0
+    
+    # Real data
+    exclude_last=2
+    
 
     offsets_vec= [ base_size *( np.random.rand(2) - 1) for i in xrange(n_stars) ]
     for i in xrange(n):
@@ -164,14 +183,25 @@ def main (argv):
             sci_arr_cd, err_arr, mask_arr = get_simulated_array (delta_time=10, n_ext=10, doCD = True, factor=factor, true_flux = true_flux)
             sci_arr_nocd, _, _ = get_simulated_array (delta_time=10, n_ext=10, doCD = False, true_flux = true_flux)
         else:
-            sci_arr, err_arr, mask_arr = get_image_data(file=this_file_path, ext_per_image = 5, exclude_last = 3)
+            hdr = esutil.io.read_header(this_file_path)
+            n_samp  = hdr.get("NSAMP")
+            ### Calculate delta time for real data
+            time1 = fitsio.read_header(this_file_path, 1).get ("SAMPTIME")
+            time2 = fitsio.read_header(this_file_path, 6).get ("SAMPTIME")
+            delta_time = np.abs(time2 - time1)
+            print "delta_time: ", delta_time
+            
+            
+            sci_arr, err_arr, mask_arr = get_image_data(file=this_file_path, ext_per_image = 5, exclude_last = exclude_last)
             true_flux = galsim.Image(sci_arr[0,:,:],scale = 0.13)
-            sci_arr_cd, _, _ = get_simulated_array (delta_time=10, n_ext=10, doCD = True, factor=factor, true_flux = true_flux)
-            sci_arr_nocd, _, _ = get_simulated_array (delta_time=10, n_ext=10, doCD = False, true_flux = true_flux)
+            #stop
+
+            sci_arr_cd, _, _ = get_simulated_array (delta_time=delta_time, n_ext=n_samp-exclude_last, doCD = True, factor=factor, true_flux = true_flux)
+            sci_arr_nocd, _, _ = get_simulated_array (delta_time=delta_time, n_ext=n_samp-exclude_last, doCD = False, true_flux = true_flux)
 
         est_cd, est_err_cd = estimator (sci_arr_cd, err_arr, mask_arr)
         est_nocd, est_err_nocd = estimator (sci_arr_nocd, err_arr, mask_arr)
-        print est_cd, est_nocd
+        #print est_cd, est_nocd
         all_est_cd[i] = est_cd
         all_est_nocd[i] = est_nocd
         
